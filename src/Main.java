@@ -1,15 +1,31 @@
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+import dao.ProductDAO;
+import models.Product;
+
 public class Main {
     public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.printf("Hello and welcome!");
+        try {
+            ProductDAO dao = new ProductDAO();
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
+            // Add product
+            Product newProd = new Product();
+            newProd.setSku("SKU123");
+            newProd.setName("Coke 1L");
+            newProd.setCategory("Beverages");
+            newProd.setPrice(45.00);
+            newProd.setCost(30.00);
+            newProd.setStockQty(50);
+            newProd.setReorderLevel(10);
+
+            dao.addProduct(newProd);
+            System.out.println("Product added!");
+
+            // Get products
+            for (Product p : dao.getAllProducts()) {
+                System.out.println(p.getProductId() + " - " + p.getName() + " (" + p.getStockQty() + ")");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

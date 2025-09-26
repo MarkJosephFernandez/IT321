@@ -10,7 +10,7 @@ import java.util.List;
 public class ProductDAO {
 
     public void addProduct(Product product) throws Exception {
-        String sql = "INSERT INTO product (sku, name, category, price, cost, stock_qty, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO products (sku, name, category, price, cost, stock_qty, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, product.getSku());
@@ -26,7 +26,7 @@ public class ProductDAO {
 
     public List<Product> getAllProducts() throws Exception {
         List<Product> products = new ArrayList<>();
-        String sql = "SELECT * FROM product";
+        String sql = "SELECT * FROM products";
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
