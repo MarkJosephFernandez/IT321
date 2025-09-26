@@ -7,7 +7,7 @@ import db.PasswordUtil;
 
 public class AccountDAO {
 
-    // ✅ Store account with SHA-256 hashed password
+    //  Store account with SHA-256 hashed password
     public void addAccount(Account acc) throws Exception {
         String sql = "INSERT INTO accounts (username, password, role, first_name, last_name) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -24,7 +24,7 @@ public class AccountDAO {
         }
     }
 
-    // ✅ Login by hashing input password and comparing with stored hash
+    // Login by hashing input password and comparing with stored hash
     public Account login(String username, String password) throws Exception {
         String sql = "SELECT * FROM accounts WHERE username=?";
         try (Connection conn = DatabaseConnection.getConnection();
