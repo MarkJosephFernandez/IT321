@@ -5,13 +5,35 @@ import models.Sale;
 import models.SaleItem;
 
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class SaleDAO {
 
     /**
+     * Helper to map a ResultSet to a Sale object.
+     */
+    private Sale mapResultSetToSale(ResultSet rs) throws SQLException {
+        Sale sale = new Sale();
+        sale.setSaleId(rs.getInt("sale_id"));
+        sale.setAccountId(rs.getInt("account_id"));
+
+        // Map to LocalDateTime for modern Java handling
+        Timestamp timestamp = rs.getTimestamp("sale_datetime");
+        if (timestamp != null) {
+            sale.setSaleDatetime(Timestamp.valueOf(timestamp.toLocalDateTime()));
+        }
+
+        sale.setTotalAmount(rs.getDouble("total_amount"));
+        sale.setPaymentMethod(rs.getString("payment_method"));
+        sale.setRemarks(rs.getString("remarks"));
+        return sale;
+    }
+
+    /**
      * Add a new sale with its items (transaction)
+     * Includes stock update and sets the generated sale ID.
      */
     public void addSale(Sale sale) throws Exception {
         Connection conn = null;
@@ -21,9 +43,10 @@ public class SaleDAO {
 
         try {
             conn = DatabaseConnection.getConnection();
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false); // Start transaction: CRITICAL
 
-            // Insert sale record
+            // 1. Insert sale record
+            // Use current time from Java or DB, using NOW() is fine if DB server time is reliable.
             String saleSql = "INSERT INTO sales (account_id, sale_datetime, total_amount, payment_method, remarks) VALUES (?, NOW(), ?, ?, ?)";
             saleStmt = conn.prepareStatement(saleSql, Statement.RETURN_GENERATED_KEYS);
             saleStmt.setInt(1, sale.getAccountId());
@@ -38,8 +61,9 @@ public class SaleDAO {
             if (rs.next()) {
                 saleId = rs.getInt(1);
             }
+            rs.close(); // Close ResultSet immediately
 
-            // Insert sale items and update stock
+            // 2. Insert sale items and update stock (using Batching for efficiency)
             String itemSql = "INSERT INTO sale_items (sale_id, product_id, qty, price) VALUES (?, ?, ?, ?)";
             itemStmt = conn.prepareStatement(itemSql);
 
@@ -47,18 +71,21 @@ public class SaleDAO {
             stockStmt = conn.prepareStatement(stockSql);
 
             for (SaleItem item : sale.getItems()) {
-                // Insert sale item
+                // Insert sale item (Batch 1)
                 itemStmt.setInt(1, saleId);
                 itemStmt.setInt(2, item.getProductId());
                 itemStmt.setInt(3, item.getQty());
                 itemStmt.setDouble(4, item.getPrice());
-                itemStmt.executeUpdate();
+                itemStmt.addBatch();
 
-                // Update product stock
+                // Update product stock (Batch 2)
                 stockStmt.setInt(1, item.getQty());
                 stockStmt.setInt(2, item.getProductId());
-                stockStmt.executeUpdate();
+                stockStmt.addBatch();
             }
+
+            itemStmt.executeBatch(); // Execute all item inserts
+            stockStmt.executeBatch(); // Execute all stock updates
 
             conn.commit(); // Commit transaction
             sale.setSaleId(saleId);
@@ -73,6 +100,8 @@ public class SaleDAO {
             }
             throw e;
         } finally {
+            // Use try-with-resources if possible, but manual close block is okay
+            // if you need to set conn.setAutoCommit(true) outside the try-with-resources.
             if (saleStmt != null) saleStmt.close();
             if (itemStmt != null) itemStmt.close();
             if (stockStmt != null) stockStmt.close();
@@ -82,9 +111,10 @@ public class SaleDAO {
             }
         }
     }
+// ----------------------------------------------------------------------------------
 
     /**
-     * Get all sales
+     * Get all sales.
      */
     public List<Sale> getAllSales() throws Exception {
         List<Sale> sales = new ArrayList<>();
@@ -95,21 +125,14 @@ public class SaleDAO {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                Sale sale = new Sale();
-                sale.setSaleId(rs.getInt("sale_id"));
-                sale.setAccountId(rs.getInt("account_id"));
-                sale.setSaleDatetime(rs.getTimestamp("sale_datetime"));
-                sale.setTotalAmount(rs.getDouble("total_amount"));
-                sale.setPaymentMethod(rs.getString("payment_method"));
-                sale.setRemarks(rs.getString("remarks"));
-                sales.add(sale);
+                sales.add(mapResultSetToSale(rs));
             }
         }
         return sales;
     }
 
     /**
-     * Get sale by ID with its items
+     * Get sale by ID with its items.
      */
     public Sale getSaleById(int saleId) throws Exception {
         String sql = "SELECT * FROM sales WHERE sale_id = ?";
@@ -121,17 +144,9 @@ public class SaleDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    Sale sale = new Sale();
-                    sale.setSaleId(rs.getInt("sale_id"));
-                    sale.setAccountId(rs.getInt("account_id"));
-                    sale.setSaleDatetime(rs.getTimestamp("sale_datetime"));
-                    sale.setTotalAmount(rs.getDouble("total_amount"));
-                    sale.setPaymentMethod(rs.getString("payment_method"));
-                    sale.setRemarks(rs.getString("remarks"));
-
+                    Sale sale = mapResultSetToSale(rs);
                     // Load sale items
                     sale.setItems(getSaleItems(saleId));
-
                     return sale;
                 }
             }
@@ -140,7 +155,7 @@ public class SaleDAO {
     }
 
     /**
-     * Get items for a specific sale
+     * Get items for a specific sale. (No change needed)
      */
     public List<SaleItem> getSaleItems(int saleId) throws Exception {
         List<SaleItem> items = new ArrayList<>();
@@ -167,27 +182,35 @@ public class SaleDAO {
     }
 
     /**
-     * Get sales by account/user
+     * Get sales by date range (Fixes the type error by accepting Strings).
      */
-    public List<Sale> getSalesByAccount(int accountId) throws Exception {
+    public List<Sale> getSalesByDateRange(String startDateStr, String endDateStr) throws Exception {
         List<Sale> sales = new ArrayList<>();
-        String sql = "SELECT * FROM sales WHERE account_id = ? ORDER BY sale_datetime DESC";
+        StringBuilder sqlBuilder = new StringBuilder("SELECT * FROM sales WHERE 1=1");
+        List<Timestamp> params = new ArrayList<>();
+
+        // Use full day range (YYYY-MM-DD 00:00:00 to YYYY-MM-DD 23:59:59)
+        if (startDateStr != null && !startDateStr.isEmpty()) {
+            sqlBuilder.append(" AND sale_datetime >= ?");
+            params.add(Timestamp.valueOf(startDateStr + " 00:00:00"));
+        }
+        if (endDateStr != null && !endDateStr.isEmpty()) {
+            sqlBuilder.append(" AND sale_datetime <= ?");
+            params.add(Timestamp.valueOf(endDateStr + " 23:59:59"));
+        }
+
+        sqlBuilder.append(" ORDER BY sale_datetime DESC");
 
         try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sqlBuilder.toString())) {
 
-            stmt.setInt(1, accountId);
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setTimestamp(i + 1, params.get(i));
+            }
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    Sale sale = new Sale();
-                    sale.setSaleId(rs.getInt("sale_id"));
-                    sale.setAccountId(rs.getInt("account_id"));
-                    sale.setSaleDatetime(rs.getTimestamp("sale_datetime"));
-                    sale.setTotalAmount(rs.getDouble("total_amount"));
-                    sale.setPaymentMethod(rs.getString("payment_method"));
-                    sale.setRemarks(rs.getString("remarks"));
-                    sales.add(sale);
+                    sales.add(mapResultSetToSale(rs));
                 }
             }
         }
@@ -195,45 +218,27 @@ public class SaleDAO {
     }
 
     /**
-     * Get sales by date range
+     * Get total sales amount for a date range (Fixes type error).
      */
-    public List<Sale> getSalesByDateRange(Date startDate, Date endDate) throws Exception {
-        List<Sale> sales = new ArrayList<>();
-        String sql = "SELECT * FROM sales WHERE sale_datetime BETWEEN ? AND ? ORDER BY sale_datetime DESC";
+    public double getTotalSalesAmount(String startDateStr, String endDateStr) throws Exception {
+        StringBuilder sqlBuilder = new StringBuilder("SELECT SUM(total_amount) as total FROM sales WHERE 1=1");
+        List<Timestamp> params = new ArrayList<>();
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setDate(1, startDate);
-            stmt.setDate(2, endDate);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Sale sale = new Sale();
-                    sale.setSaleId(rs.getInt("sale_id"));
-                    sale.setAccountId(rs.getInt("account_id"));
-                    sale.setSaleDatetime(rs.getTimestamp("sale_datetime"));
-                    sale.setTotalAmount(rs.getDouble("total_amount"));
-                    sale.setPaymentMethod(rs.getString("payment_method"));
-                    sale.setRemarks(rs.getString("remarks"));
-                    sales.add(sale);
-                }
-            }
+        if (startDateStr != null && !startDateStr.isEmpty()) {
+            sqlBuilder.append(" AND sale_datetime >= ?");
+            params.add(Timestamp.valueOf(startDateStr + " 00:00:00"));
         }
-        return sales;
-    }
-
-    /**
-     * Get total sales amount for a date range
-     */
-    public double getTotalSalesAmount(Date startDate, Date endDate) throws Exception {
-        String sql = "SELECT SUM(total_amount) as total FROM sales WHERE sale_datetime BETWEEN ? AND ?";
+        if (endDateStr != null && !endDateStr.isEmpty()) {
+            sqlBuilder.append(" AND sale_datetime <= ?");
+            params.add(Timestamp.valueOf(endDateStr + " 23:59:59"));
+        }
 
         try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sqlBuilder.toString())) {
 
-            stmt.setDate(1, startDate);
-            stmt.setDate(2, endDate);
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setTimestamp(i + 1, params.get(i));
+            }
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -245,10 +250,11 @@ public class SaleDAO {
     }
 
     /**
-     * Delete a sale (use with caution - should restore stock)
+     * Delete a sale and restore stock (CRITICAL FIX: Stock must be restored).
      */
     public void deleteSale(int saleId) throws Exception {
         Connection conn = null;
+        PreparedStatement restoreStmt = null;
         PreparedStatement itemStmt = null;
         PreparedStatement saleStmt = null;
 
@@ -256,13 +262,31 @@ public class SaleDAO {
             conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false);
 
-            // Delete sale items first (foreign key constraint)
+            // 1. Get items before deleting them (CRITICAL for stock restore)
+            List<SaleItem> items = getSaleItems(saleId);
+            if (items.isEmpty()) {
+                // If no items, proceed with simple delete
+                throw new Exception("Sale has no items or was already deleted.");
+            }
+
+            // 2. Restore product stock
+            String restoreSql = "UPDATE products SET stock_qty = stock_qty + ? WHERE product_id = ?";
+            restoreStmt = conn.prepareStatement(restoreSql);
+
+            for (SaleItem item : items) {
+                restoreStmt.setInt(1, item.getQty()); // Add quantity back
+                restoreStmt.setInt(2, item.getProductId());
+                restoreStmt.addBatch();
+            }
+            restoreStmt.executeBatch();
+
+            // 3. Delete sale items
             String itemSql = "DELETE FROM sale_items WHERE sale_id = ?";
             itemStmt = conn.prepareStatement(itemSql);
             itemStmt.setInt(1, saleId);
             itemStmt.executeUpdate();
 
-            // Delete sale
+            // 4. Delete sale
             String saleSql = "DELETE FROM sales WHERE sale_id = ?";
             saleStmt = conn.prepareStatement(saleSql);
             saleStmt.setInt(1, saleId);
@@ -280,6 +304,7 @@ public class SaleDAO {
             }
             throw e;
         } finally {
+            if (restoreStmt != null) restoreStmt.close();
             if (itemStmt != null) itemStmt.close();
             if (saleStmt != null) saleStmt.close();
             if (conn != null) {

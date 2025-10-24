@@ -15,33 +15,50 @@ public class Product {
     private Timestamp updatedAt;
 
     // Getters and Setters
-    public int getProductId() { return productId; }
-    public void setProductId(int productId) { this.productId = productId; }
+    public int getProductId() {
+        return productId; }
+    public void setProductId(int productId) {
+        this.productId = productId; }
 
-    public String getSku() { return sku; }
+    public String getSku() {
+        return sku; }
     public void setSku(String sku) { this.sku = sku; }
 
     public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) {
+        this.name = name; }
 
     public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setCategory(String category) {
+        this.category = category; }
 
-    public double getPrice() { return price; }
-    public void setPrice(double price) { this.price = price; }
+    public double getPrice() {
+        return price; }
+    public void setPrice(double price) {
+        this.price = price; }
 
-    public double getCost() { return cost; }
-    public void setCost(double cost) { this.cost = cost; }
+    public double getCost() {
+        return cost; }
+    public void setCost(double cost) {
+        this.cost = cost; }
 
-    public int getStockQty() { return stockQty; }
-    public void setStockQty(int stockQty) { this.stockQty = stockQty; }
+    public int getStockQty() {
+        return stockQty; }
+    public void setStockQty(int stockQty) {
+        this.stockQty = stockQty; }
 
-    public int getReorderLevel() { return reorderLevel; }
-    public void setReorderLevel(int reorderLevel) { this.reorderLevel = reorderLevel; }
+    public int getReorderLevel() {
+        return reorderLevel; }
+    public void setReorderLevel(int reorderLevel) {
+        this.reorderLevel = reorderLevel; }
 
-    public Timestamp getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
+    public Timestamp getCreatedAt() {
+        return createdAt; }
+    public void setCreatedAt(Timestamp createdAt) {
+        this.createdAt = createdAt; }
 
-    public Timestamp getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Timestamp updatedAt) { this.updatedAt = updatedAt; }
+    public Timestamp getUpdatedAt() {
+        return updatedAt; }
+    public void setUpdatedAt(Timestamp updatedAt) {
+        this.updatedAt = updatedAt; }
 }

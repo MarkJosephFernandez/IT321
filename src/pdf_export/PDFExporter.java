@@ -5,6 +5,7 @@ import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 
+import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -126,5 +127,8 @@ public class PDFExporter {
         }
 
         return value;
+    }
+
+    public static void exportSalesToPDF(JTable salesTable, String filePath, String trim, String trim1) {
     }
 }

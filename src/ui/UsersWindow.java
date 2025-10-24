@@ -169,14 +169,8 @@ public class UsersWindow extends JFrame {
         }
     }
 }
-// ----------------------------------------------------------------------------------
-// NEW COMPONENT: UserFormDialog (for Add/Edit functionality)
-// ----------------------------------------------------------------------------------
 
-/**
- * A reusable JDialog for adding a new user or editing an existing user.
- * This separates input logic from the main window.
- */
+
 class UserFormDialog extends JDialog {
     private JTextField usernameField;
     private JTextField firstNameField;
