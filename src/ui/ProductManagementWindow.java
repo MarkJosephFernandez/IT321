@@ -80,9 +80,6 @@ public class ProductManagementWindow extends JFrame {
         refreshProducts(null);
     }
 
-    // ----------------------------------------------------------------------------------
-    // ACTION METHODS
-    // ----------------------------------------------------------------------------------
 
     private void refreshProducts(ActionEvent e) {
         tableModel.setRowCount(0);
@@ -150,7 +147,7 @@ public class ProductManagementWindow extends JFrame {
             if (confirm == JOptionPane.YES_OPTION) {
                 ProductDAO dao = new ProductDAO();
                 try {
-                    dao.deleteProduct(id);
+                    dao.deactivateProduct(id);
                     JOptionPane.showMessageDialog(this, "Product deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
                     refreshProducts(null);
                 } catch (Exception ex) {
@@ -163,20 +160,14 @@ public class ProductManagementWindow extends JFrame {
         }
     }
 
-    // --- Overload for initial call ---
+
     private void refreshProducts() {
         refreshProducts(null);
     }
 }
 
 
-// ----------------------------------------------------------------------------------
-// NEW COMPONENT: ProductFormDialog (for Add/Edit functionality)
-// ----------------------------------------------------------------------------------
 
-/**
- * A reusable JDialog for adding a new product or editing an existing product.
- */
 class ProductFormDialog extends JDialog {
     private JTextField skuField, nameField, priceField, stockField;
     private JComboBox<String> categoryComboBox;

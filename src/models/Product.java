@@ -13,6 +13,7 @@ public class Product {
     private int reorderLevel;
     private Timestamp createdAt;
     private Timestamp updatedAt;
+    private Boolean isActive =true;
 
     // Getters and Setters
     public int getProductId() {
@@ -61,4 +62,13 @@ public class Product {
         return updatedAt; }
     public void setUpdatedAt(Timestamp updatedAt) {
         this.updatedAt = updatedAt; }
+
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public void setActive(boolean active) {
+        isActive = active;
+    }
 }
+

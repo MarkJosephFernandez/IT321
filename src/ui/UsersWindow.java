@@ -6,74 +6,161 @@ import models.Account;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class UsersWindow extends JFrame {
     private JTable userTable;
     private DefaultTableModel tableModel;
+    private TableRowSorter<DefaultTableModel> sorter;
     private JButton addButton, editButton, deleteButton, refreshButton;
+    private JTextField searchField;
+    private JLabel statusLabel;
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]{3,20}$");
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d@$!%*#?&]{6,}$");
 
     public UsersWindow() {
         // --- Frame Setup ---
-        setTitle("👥 User Management");
-        setSize(700, 450); // Slightly larger
+        setTitle("👥 User Management System");
+        setSize(950, 600);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE); // Close this window, not the whole app
-        setLayout(new BorderLayout(10, 10)); // Add spacing to the main layout
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        setLayout(new BorderLayout(10, 10));
 
-        // === Table ===
-        String[] cols = {"ID", "Username", "Role", "First Name", "Last Name"};
+        // Set modern look and feel
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // === Top Panel with Search ===
+        JPanel topPanel = new JPanel(new BorderLayout(10, 5));
+        topPanel.setBorder(new EmptyBorder(10, 10, 5, 10));
+
+        JLabel searchLabel = new JLabel("🔍 Search:");
+        searchField = new JTextField(20);
+        searchField.setToolTipText("Search by username, name, or role");
+
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        searchPanel.add(searchLabel);
+        searchPanel.add(searchField);
+
+        statusLabel = new JLabel("Loading users...");
+        statusLabel.setForeground(new Color(100, 100, 100));
+
+        topPanel.add(searchPanel, BorderLayout.WEST);
+        topPanel.add(statusLabel, BorderLayout.EAST);
+
+        // === Table Setup ===
+        String[] cols = {"ID", "Username", "Role", "First Name", "Last Name", "Created"};
         tableModel = new DefaultTableModel(cols, 0) {
-            // Override isCellEditable to prevent direct table editing
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
+
+            @Override
+            public Class<?> getColumnClass(int column) {
+                return column == 0 ? Integer.class : String.class;
+            }
         };
+
         userTable = new JTable(tableModel);
-        userTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); // Only one row at a time
-        userTable.getTableHeader().setReorderingAllowed(false); // Prevent column reordering
+        userTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        userTable.getTableHeader().setReorderingAllowed(false);
+        userTable.setRowHeight(28);
+        userTable.setShowGrid(true);
+        userTable.setGridColor(new Color(230, 230, 230));
+
+        // Enable sorting
+        sorter = new TableRowSorter<>(tableModel);
+        userTable.setRowSorter(sorter);
+
+        // Column widths
+        userTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+        userTable.getColumnModel().getColumn(0).setMaxWidth(70);
+        userTable.getColumnModel().getColumn(1).setPreferredWidth(120);
+        userTable.getColumnModel().getColumn(2).setPreferredWidth(80);
+        userTable.getColumnModel().getColumn(3).setPreferredWidth(120);
+        userTable.getColumnModel().getColumn(4).setPreferredWidth(120);
+        userTable.getColumnModel().getColumn(5).setPreferredWidth(100);
+
+        // Custom renderers
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        userTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
+        userTable.getColumnModel().getColumn(2).setCellRenderer(createRoleRenderer());
+
+        // Zebra striping
+        userTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(245, 245, 245));
+                }
+                return c;
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(userTable);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("User List"));
+        scrollPane.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createEmptyBorder(5, 10, 5, 10),
+                BorderFactory.createTitledBorder("User Directory")
+        ));
 
-        // === Buttons & Panel ===
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5)); // Align buttons to the right
+        // === Button Panel ===
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
+        buttonPanel.setBorder(new EmptyBorder(5, 10, 10, 10));
 
-        // Initialize new Edit button
-        editButton = new JButton("Edit User");
-        addButton = new JButton("Add New User");
-        deleteButton = new JButton("Delete User");
-        refreshButton = new JButton("Refresh Data");
+        refreshButton = createStyledButton("🔄 Refresh", new Color(70, 130, 180));
+        addButton = createStyledButton("➕ Add User", new Color(34, 139, 34));
+        editButton = createStyledButton("✍️ Edit", new Color(255, 140, 0));
+        deleteButton = createStyledButton("🗑️ Delete", new Color(220, 20, 60));
 
-        // Add icons for better visual appeal
-        addButton.setIcon(UIManager.getIcon("FileChooser.upFolderIcon"));
-        editButton.setIcon(UIManager.getIcon("FileView.floppyDriveIcon"));
-        deleteButton.setIcon(UIManager.getIcon("InternalFrame.closeIcon"));
-        refreshButton.setIcon(UIManager.getIcon("Table.ascendingSortIcon"));
+        editButton.setEnabled(false);
+        deleteButton.setEnabled(false);
 
         buttonPanel.add(refreshButton);
-        buttonPanel.add(new JSeparator(SwingConstants.VERTICAL)); // Separator for better grouping
+        buttonPanel.add(Box.createHorizontalStrut(10));
         buttonPanel.add(addButton);
         buttonPanel.add(editButton);
         buttonPanel.add(deleteButton);
 
-        // Add padding around the button panel
-        buttonPanel.setBorder(new EmptyBorder(0, 0, 5, 0));
-
-        // === Add components to Frame ===
+        // === Assembly ===
+        add(topPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
         add(buttonPanel, BorderLayout.SOUTH);
 
-        // === Actions ===
+        // === Event Listeners ===
+        userTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                boolean selected = userTable.getSelectedRow() != -1;
+                editButton.setEnabled(selected);
+                deleteButton.setEnabled(selected);
+            }
+        });
+
+        searchField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                filterTable();
+            }
+        });
+
         refreshButton.addActionListener(this::refreshData);
         addButton.addActionListener(this::addUser);
-        editButton.addActionListener(this::editUser); // New action
+        editButton.addActionListener(this::editUser);
         deleteButton.addActionListener(this::deleteUser);
 
-        // Add a mouse listener for quick double-click editing (UX improvement)
         userTable.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mousePressed(java.awt.event.MouseEvent evt) {
                 if (evt.getClickCount() == 2 && userTable.getSelectedRow() != -1) {
@@ -82,94 +169,204 @@ public class UsersWindow extends JFrame {
             }
         });
 
-        // Load initial data
+        // Keyboard shortcuts
+        setupKeyboardShortcuts();
+
+        // Initial load
         refreshData(null);
     }
 
-    // ----------------------------------------------------------------------------------
-    // ACTION METHODS
-    // ----------------------------------------------------------------------------------
+    private JButton createStyledButton(String text, Color color) {
+        JButton btn = new JButton(text);
+        btn.setFocusPainted(false);
+        btn.setFont(btn.getFont().deriveFont(Font.BOLD));
+        btn.setForeground(color);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
 
-    private void refreshData(ActionEvent e) {
-        try {
-            // Clear current data
-            tableModel.setRowCount(0);
+    private DefaultTableCellRenderer createRoleRenderer() {
+        return new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setHorizontalAlignment(JLabel.CENTER);
 
-            // Fetch fresh data
-            AccountDAO dao = new AccountDAO();
-            List<Account> users = dao.getAllAccounts();
-
-            for (Account u : users) {
-                tableModel.addRow(new Object[]{
-                        u.getAccountId(),
-                        u.getUsername(),
-                        // Display role more clearly if needed, e.g., using a switch
-                        u.getRole(),
-                        u.getFirstName() == null ? "-" : u.getFirstName(),
-                        u.getLastName() == null ? "-" : u.getLastName()
-                });
+                if (!isSelected && value != null) {
+                    String role = value.toString();
+                    if ("ADMIN".equals(role)) {
+                        setForeground(new Color(220, 20, 60));
+                        setFont(getFont().deriveFont(Font.BOLD));
+                    } else {
+                        setForeground(new Color(70, 130, 180));
+                    }
+                }
+                return c;
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Error loading users: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        };
+    }
+
+    private void setupKeyboardShortcuts() {
+        // Ctrl+F to focus search
+        KeyStroke ctrlF = KeyStroke.getKeyStroke(KeyEvent.VK_F, KeyEvent.CTRL_DOWN_MASK);
+        getRootPane().registerKeyboardAction(e -> searchField.requestFocus(),
+                ctrlF, JComponent.WHEN_IN_FOCUSED_WINDOW);
+
+        // Ctrl+N for new user
+        KeyStroke ctrlN = KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK);
+        getRootPane().registerKeyboardAction(e -> addUser(null),
+                ctrlN, JComponent.WHEN_IN_FOCUSED_WINDOW);
+
+        // Delete key for delete action
+        KeyStroke deleteKey = KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0);
+        getRootPane().registerKeyboardAction(e -> {
+            if (deleteButton.isEnabled()) deleteUser(null);
+        }, deleteKey, JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
+
+    private void filterTable() {
+        String text = searchField.getText().trim();
+        if (text.isEmpty()) {
+            sorter.setRowFilter(null);
+        } else {
+            sorter.setRowFilter(RowFilter.regexFilter("(?i)" + text));
+        }
+        updateStatusLabel();
+    }
+
+    private void updateStatusLabel() {
+        int total = tableModel.getRowCount();
+        int visible = userTable.getRowCount();
+        if (visible == total) {
+            statusLabel.setText(String.format("Total Users: %d", total));
+        } else {
+            statusLabel.setText(String.format("Showing: %d / %d users", visible, total));
         }
     }
 
+    private void refreshData(ActionEvent e) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                statusLabel.setText("Loading...");
+                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+                tableModel.setRowCount(0);
+                AccountDAO dao = new AccountDAO();
+                List<Account> users = dao.getAllAccounts();
+
+                for (Account u : users) {
+                    String roleDisplay = u.getRole() != null ? u.getRole().toUpperCase() : "N/A";
+                    String created = "—"; // Could add timestamp if available in Account model
+
+                    tableModel.addRow(new Object[]{
+                            u.getAccountId(),
+                            u.getUsername(),
+                            roleDisplay,
+                            u.getFirstName() != null && !u.getFirstName().isEmpty() ? u.getFirstName() : "—",
+                            u.getLastName() != null && !u.getLastName().isEmpty() ? u.getLastName() : "—",
+                            created
+                    });
+                }
+
+                updateStatusLabel();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                statusLabel.setText("Error loading data");
+                JOptionPane.showMessageDialog(this,
+                        "Failed to load users:\n" + ex.getMessage(),
+                        "Database Error",
+                        JOptionPane.ERROR_MESSAGE);
+            } finally {
+                setCursor(Cursor.getDefaultCursor());
+            }
+        });
+    }
+
     private void addUser(ActionEvent e) {
-        // Use a dedicated dialog for better input collection
-        new UserFormDialog(this, null).setVisible(true);
-        refreshData(null); // Refresh data after the dialog closes
+        UserFormDialog dialog = new UserFormDialog(this, null);
+        dialog.setVisible(true);
+        if (dialog.isSuccess()) {
+            refreshData(null);
+        }
     }
 
     private void editUser(ActionEvent e) {
         int row = userTable.getSelectedRow();
         if (row >= 0) {
             try {
-                int userId = (int) tableModel.getValueAt(row, 0);
+                int modelRow = userTable.convertRowIndexToModel(row);
+                int userId = (int) tableModel.getValueAt(modelRow, 0);
                 AccountDAO dao = new AccountDAO();
-                Account userToEdit = dao.getAccountById(userId); // Fetch the full account object
+                Account userToEdit = dao.getAccountById(userId);
 
                 if (userToEdit != null) {
-                    // Use the dedicated dialog to edit the existing user
-                    new UserFormDialog(this, userToEdit).setVisible(true);
-                    refreshData(null);
+                    UserFormDialog dialog = new UserFormDialog(this, userToEdit);
+                    dialog.setVisible(true);
+                    if (dialog.isSuccess()) {
+                        refreshData(null);
+                    }
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Error fetching user data: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Error fetching user data:\n" + ex.getMessage(),
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
             }
-        } else {
-            JOptionPane.showMessageDialog(this, "Please select a user to edit.", "No Selection", JOptionPane.WARNING_MESSAGE);
         }
     }
 
     private void deleteUser(ActionEvent e) {
         int row = userTable.getSelectedRow();
         if (row >= 0) {
-            int userId = (int) tableModel.getValueAt(row, 0);
-            String username = (String) tableModel.getValueAt(row, 1);
+            int modelRow = userTable.convertRowIndexToModel(row);
+            int userId = (int) tableModel.getValueAt(modelRow, 0);
+            String username = (String) tableModel.getValueAt(modelRow, 1);
 
             int confirm = JOptionPane.showConfirmDialog(this,
-                    "Are you sure you want to delete user: " + username + "? This action is irreversible.",
-                    "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    String.format("<html><body style='width: 300px'>" +
+                            "<h3>⚠️ Confirm Deletion</h3>" +
+                            "Are you sure you want to delete user:<br><br>" +
+                            "<b>%s</b> (ID: %d)<br><br>" +
+                            "This action cannot be undone.</body></html>", username, userId),
+                    "Delete User",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
 
             if (confirm == JOptionPane.YES_OPTION) {
                 try {
                     AccountDAO dao = new AccountDAO();
                     dao.deleteAccount(userId);
-                    JOptionPane.showMessageDialog(this, "User deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(this,
+                            "User '" + username + "' deleted successfully.",
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
                     refreshData(null);
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    JOptionPane.showMessageDialog(this, "Error deleting user: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this,
+                            "Error deleting user:\n" + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
                 }
             }
-        } else {
-            JOptionPane.showMessageDialog(this, "Please select a user to delete.", "No Selection", JOptionPane.WARNING_MESSAGE);
         }
+    }
+
+    // Validation methods
+    static boolean isValidUsername(String username) {
+        return USERNAME_PATTERN.matcher(username).matches();
+    }
+
+    static boolean isValidPassword(String password) {
+        return PASSWORD_PATTERN.matcher(password).matches();
     }
 }
 
+// ============================================================================
+// USER FORM DIALOG
+// ============================================================================
 
 class UserFormDialog extends JDialog {
     private JTextField usernameField;
@@ -177,73 +374,132 @@ class UserFormDialog extends JDialog {
     private JTextField lastNameField;
     private JComboBox<String> roleComboBox;
     private JPasswordField passwordField;
+    private JPasswordField confirmPasswordField;
+    private JCheckBox showPasswordCheckBox;
     private JButton saveButton;
-    private Account account; // null for add, non-null for edit
+    private JLabel passwordStrengthLabel;
+    private Account account;
+    private boolean success = false;
 
     public UserFormDialog(Frame owner, Account acc) {
-        super(owner, acc == null ? "Add New User" : "Edit User", true); // Modal dialog
+        super(owner, acc == null ? "✨ Add New User" : "✍️ Edit User", true);
         this.account = acc;
 
         setLayout(new BorderLayout(10, 10));
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
+        // Form Panel
+        JPanel formPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(8, 8, 8, 8);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
 
         int row = 0;
 
-        // 1. Username
-        gbc.gridx = 0; gbc.gridy = row; gbc.anchor = GridBagConstraints.WEST; formPanel.add(new JLabel("Username:"), gbc);
-        usernameField = new JTextField(15);
-        gbc.gridx = 1; gbc.gridy = row++; gbc.weightx = 1.0; formPanel.add(usernameField, gbc);
+        // Username
+        addFormField(formPanel, gbc, row++, "Username:", usernameField = new JTextField(20));
+        usernameField.setToolTipText("3-20 characters: letters, numbers, underscore");
 
-        // 2. First Name
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0.0; formPanel.add(new JLabel("First Name:"), gbc);
-        firstNameField = new JTextField(15);
-        gbc.gridx = 1; gbc.gridy = row++; gbc.weightx = 1.0; formPanel.add(firstNameField, gbc);
+        // First Name
+        addFormField(formPanel, gbc, row++, "First Name: *", firstNameField = new JTextField(20));
 
-        // 3. Last Name
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0.0; formPanel.add(new JLabel("Last Name:"), gbc);
-        lastNameField = new JTextField(15);
-        gbc.gridx = 1; gbc.gridy = row++; gbc.weightx = 1.0; formPanel.add(lastNameField, gbc);
+        // Last Name
+        addFormField(formPanel, gbc, row++, "Last Name:", lastNameField = new JTextField(20));
 
-        // 4. Role
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0.0; formPanel.add(new JLabel("Role:"), gbc);
-        roleComboBox = new JComboBox<>(new String[]{"ADMIN", "STAFF"});
-        gbc.gridx = 1; gbc.gridy = row++; gbc.weightx = 1.0; formPanel.add(roleComboBox, gbc);
+        // Role
+        addFormField(formPanel, gbc, row++, "Role:", roleComboBox = new JComboBox<>(new String[]{"ADMIN", "STAFF"}));
 
-        // 5. Password (Only required for add, or can be used for change)
-        String passwordLabel = (account == null) ? "Password:" : "New Password (Leave blank to keep old):";
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0.0; formPanel.add(new JLabel(passwordLabel), gbc);
-        passwordField = new JPasswordField(15);
-        gbc.gridx = 1; gbc.gridy = row++; gbc.weightx = 1.0; formPanel.add(passwordField, gbc);
+        // Password
+        String passwordLabel = (account == null) ? "Password: *" : "New Password:";
+        addFormField(formPanel, gbc, row++, passwordLabel, passwordField = new JPasswordField(20));
+        passwordField.setToolTipText("Min 6 chars: at least 1 letter and 1 number");
 
-        // --- Button Panel ---
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        saveButton = new JButton(account == null ? "Create User" : "Save Changes");
-        JButton cancelButton = new JButton("Cancel");
+        // Confirm Password
+        if (account == null) {
+            addFormField(formPanel, gbc, row++, "Confirm Password: *", confirmPasswordField = new JPasswordField(20));
+        } else {
+            confirmPasswordField = new JPasswordField(20);
+            addFormField(formPanel, gbc, row++, "Confirm New Password:", confirmPasswordField);
+        }
+
+        // Show Password Checkbox
+        gbc.gridx = 1;
+        gbc.gridy = row++;
+        gbc.gridwidth = 1;
+        showPasswordCheckBox = new JCheckBox("Show Password");
+        formPanel.add(showPasswordCheckBox, gbc);
+
+        // Password Strength Label
+        gbc.gridx = 1;
+        gbc.gridy = row++;
+        passwordStrengthLabel = new JLabel(" ");
+        passwordStrengthLabel.setFont(passwordStrengthLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        formPanel.add(passwordStrengthLabel, gbc);
+
+        mainPanel.add(formPanel, BorderLayout.CENTER);
+
+        // Button Panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
+        saveButton = new JButton(account == null ? "💾 Create User" : "💾 Save Changes");
+        JButton cancelButton = new JButton("❌ Cancel");
+
+        saveButton.setFont(saveButton.getFont().deriveFont(Font.BOLD));
+
         buttonPanel.add(saveButton);
         buttonPanel.add(cancelButton);
 
-        // --- Load existing data if editing ---
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        add(mainPanel);
+
+        // Load existing data if editing
         if (account != null) {
             loadUserData();
-        } else {
-            // For new users, ensure password field is visible
-            passwordField.setVisible(true);
         }
 
-        // --- Listeners ---
+        // Event Listeners
+        showPasswordCheckBox.addActionListener(e -> {
+            char echoChar = showPasswordCheckBox.isSelected() ? (char) 0 : '•';
+            passwordField.setEchoChar(echoChar);
+            confirmPasswordField.setEchoChar(echoChar);
+        });
+
+        passwordField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                updatePasswordStrength();
+            }
+        });
+
         saveButton.addActionListener(this::saveUser);
         cancelButton.addActionListener(e -> dispose());
 
-        // --- Final Assembly ---
-        add(formPanel, BorderLayout.CENTER);
-        add(buttonPanel, BorderLayout.SOUTH);
+        // Enter key to save
+        getRootPane().setDefaultButton(saveButton);
+
         pack();
+        setMinimumSize(new Dimension(450, getPreferredSize().height));
         setLocationRelativeTo(owner);
+
+        if (account == null) {
+            usernameField.requestFocusInWindow();
+        } else {
+            firstNameField.requestFocusInWindow();
+        }
+    }
+
+    private void addFormField(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent field) {
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.weightx = 0.0;
+        gbc.gridwidth = 1;
+        JLabel lbl = new JLabel(label);
+        panel.add(lbl, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        panel.add(field, gbc);
     }
 
     private void loadUserData() {
@@ -251,63 +507,133 @@ class UserFormDialog extends JDialog {
         firstNameField.setText(account.getFirstName());
         lastNameField.setText(account.getLastName());
         roleComboBox.setSelectedItem(account.getRole());
-
-        // Prevent editing the username for security/data integrity
         usernameField.setEnabled(false);
-
-        // Clear password field to avoid displaying hash/old password
         passwordField.setText("");
+        confirmPasswordField.setText("");
     }
 
-    private void saveUser(ActionEvent e) {
-        // Basic Validation
-        if (usernameField.getText().trim().isEmpty() || firstNameField.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Username and First Name cannot be empty.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+    private void updatePasswordStrength() {
+        String password = new String(passwordField.getPassword());
+        if (password.isEmpty()) {
+            passwordStrengthLabel.setText(" ");
             return;
         }
 
+        int strength = calculatePasswordStrength(password);
+        String[] labels = {"❌ Weak", "⚠️ Fair", "✅ Good", "💪 Strong"};
+        Color[] colors = {Color.RED, Color.ORANGE, new Color(34, 139, 34), new Color(0, 100, 0)};
+
+        int index = Math.min(strength, 3);
+        passwordStrengthLabel.setText("Strength: " + labels[index]);
+        passwordStrengthLabel.setForeground(colors[index]);
+    }
+
+    private int calculatePasswordStrength(String password) {
+        int strength = 0;
+        if (password.length() >= 8) strength++;
+        if (password.matches(".*[a-z].*") && password.matches(".*[A-Z].*")) strength++;
+        if (password.matches(".*\\d.*")) strength++;
+        if (password.matches(".*[@$!%*#?&].*")) strength++;
+        return strength;
+    }
+
+    private void saveUser(ActionEvent e) {
+        // Validation
+        String username = usernameField.getText().trim();
+        String firstName = firstNameField.getText().trim();
+        String lastName = lastNameField.getText().trim();
+
+        if (username.isEmpty() || firstName.isEmpty()) {
+            showError("Username and First Name are required.");
+            return;
+        }
+
+        if (!UsersWindow.isValidUsername(username) && account == null) {
+            showError("Invalid username format.\nUse 3-20 characters: letters, numbers, underscore only.");
+            return;
+        }
+
+        char[] passwordChars = passwordField.getPassword();
+        char[] confirmChars = confirmPasswordField.getPassword();
+
         try {
             AccountDAO dao = new AccountDAO();
+            boolean isNewUser = (account == null);
 
-            // If adding a new user, create a new Account object
-            if (account == null) {
-                account = new Account();
-                account.setUsername(usernameField.getText().trim());
-
-                // New user MUST have a password
-                if (passwordField.getPassword().length == 0) {
-                    JOptionPane.showMessageDialog(this, "New users must have a password.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            if (isNewUser) {
+                if (passwordChars.length == 0) {
+                    showError("Password is required for new users.");
                     return;
+                }
+
+                String password = new String(passwordChars);
+                if (!UsersWindow.isValidPassword(password)) {
+                    showError("Password must be at least 6 characters\nand contain at least 1 letter and 1 number.");
+                    return;
+                }
+
+                if (!new String(passwordChars).equals(new String(confirmChars))) {
+                    showError("Passwords do not match!");
+                    return;
+                }
+
+                account = new Account();
+                account.setUsername(username);
+                account.setPassword(password);
+            } else {
+                // Editing existing user
+                if (passwordChars.length > 0) {
+                    String password = new String(passwordChars);
+                    if (!UsersWindow.isValidPassword(password)) {
+                        showError("Password must be at least 6 characters\nand contain at least 1 letter and 1 number.");
+                        return;
+                    }
+
+                    if (!new String(passwordChars).equals(new String(confirmChars))) {
+                        showError("Passwords do not match!");
+                        return;
+                    }
+
+                    account.setPassword(password);
                 }
             }
 
-            // Set common properties
-            account.setFirstName(firstNameField.getText().trim());
-            account.setLastName(lastNameField.getText().trim());
+            account.setFirstName(firstName);
+            account.setLastName(lastName);
             account.setRole((String) roleComboBox.getSelectedItem());
 
-            // Handle Password Change/Set
-            char[] passwordChars = passwordField.getPassword();
-            if (passwordChars.length > 0) {
-                // Only update password if field is not empty
-                String newPassword = new String(passwordChars);
-                account.setPassword(newPassword);
-            }
-            // Securely erase the temporary password string
-            java.util.Arrays.fill(passwordChars, ' ');
-
-            if (account.getAccountId() == 0) { // New user (ID not set yet)
+            if (isNewUser) {
                 dao.addAccount(account);
-                JOptionPane.showMessageDialog(this, "User added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else { // Existing user (ID already set)
+                JOptionPane.showMessageDialog(this,
+                        "User '" + username + "' created successfully!",
+                        "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
+            } else {
                 dao.updateAccount(account);
-                JOptionPane.showMessageDialog(this, "User updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "User '" + username + "' updated successfully!",
+                        "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
             }
 
-            dispose(); // Close the dialog
+            success = true;
+            dispose();
+
         } catch (Exception ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Error saving user data: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            showError("Database error:\n" + ex.getMessage());
+        } finally {
+            // Security: Clear password arrays
+            if (passwordChars != null) java.util.Arrays.fill(passwordChars, ' ');
+            if (confirmChars != null) java.util.Arrays.fill(confirmChars, ' ');
         }
+    }
+
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(this, message, "Validation Error", JOptionPane.WARNING_MESSAGE);
+    }
+
+    public boolean isSuccess() {
+        return success;
     }
 }

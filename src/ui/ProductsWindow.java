@@ -121,7 +121,7 @@ public class ProductsWindow extends JFrame {
             if (confirm == JOptionPane.YES_OPTION) {
                 try {
                     ProductDAO dao = new ProductDAO();
-                    dao.deleteProduct(productId);
+                    dao.deactivateProduct(productId);
                     refreshData(null);
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(this, "Error deleting product.");

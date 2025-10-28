@@ -9,7 +9,9 @@ import java.util.List;
 
 public class ProductDAO {
 
-    // Add a new product
+    // Add a new product (No change needed here)
+    // NOTE: Ensure your addProduct also sets 'is_active = TRUE'
+    // or rely on the column's default value in the DB.
     public void addProduct(Product product) throws Exception {
         String sql = "INSERT INTO products (sku, name, category, price, cost, stock_qty, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -25,10 +27,11 @@ public class ProductDAO {
         }
     }
 
-    // Get all products
+    // Get all products (MODIFIED: Only retrieves active products)
     public List<Product> getAllProducts() throws Exception {
         List<Product> products = new ArrayList<>();
-        String sql = "SELECT * FROM products";
+        // ONLY select active products
+        String sql = "SELECT * FROM products WHERE is_active = TRUE";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -42,15 +45,18 @@ public class ProductDAO {
                 p.setCost(rs.getDouble("cost"));
                 p.setStockQty(rs.getInt("stock_qty"));
                 p.setReorderLevel(rs.getInt("reorder_level"));
+                // ASSUMING you added the 'is_active' field to your Product model
+                p.setActive(rs.getBoolean("is_active"));
                 products.add(p);
             }
         }
         return products;
     }
 
-    // Get a product by ID
+    // Get a product by ID (MODIFIED: Only retrieves active products)
     public Product getProductById(int productId) throws Exception {
-        String sql = "SELECT * FROM products WHERE product_id = ?";
+        // Only select active products
+        String sql = "SELECT * FROM products WHERE product_id = ? AND is_active = TRUE";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);
@@ -65,6 +71,7 @@ public class ProductDAO {
                     p.setCost(rs.getDouble("cost"));
                     p.setStockQty(rs.getInt("stock_qty"));
                     p.setReorderLevel(rs.getInt("reorder_level"));
+                    p.setActive(rs.getBoolean("is_active"));
                     return p;
                 }
             }
@@ -72,7 +79,7 @@ public class ProductDAO {
         return null;
     }
 
-    // Update an existing product
+    // Update an existing product (No change needed here)
     public void updateProduct(Product product) throws Exception {
         String sql = "UPDATE products SET sku = ?, name = ?, category = ?, price = ?, cost = ?, stock_qty = ?, reorder_level = ? WHERE product_id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -89,9 +96,13 @@ public class ProductDAO {
         }
     }
 
-    // Delete a product by ID
-    public void deleteProduct(int productId) throws Exception {
-        String sql = "DELETE FROM products WHERE product_id = ?";
+    // REPLACED physical delete with a soft delete/deactivate (NEW METHOD)
+    /**
+     * Logically deletes/deactivates a product, setting is_active to FALSE.
+     * This avoids foreign key constraint errors and preserves historical data.
+     */
+    public void deactivateProduct(int productId) throws Exception {
+        String sql = "UPDATE products SET is_active = FALSE WHERE product_id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);
@@ -99,9 +110,12 @@ public class ProductDAO {
         }
     }
 
-    // Get product by SKU (useful for lookups)
+    // NOTE: The old public void deleteProduct(int productId) method is now removed.
+
+    // Get product by SKU (MODIFIED: Only retrieves active products)
     public Product getProductBySku(String sku) throws Exception {
-        String sql = "SELECT * FROM products WHERE sku = ?";
+        // Only select active products
+        String sql = "SELECT * FROM products WHERE sku = ? AND is_active = TRUE";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, sku);
@@ -116,6 +130,7 @@ public class ProductDAO {
                     p.setCost(rs.getDouble("cost"));
                     p.setStockQty(rs.getInt("stock_qty"));
                     p.setReorderLevel(rs.getInt("reorder_level"));
+                    p.setActive(rs.getBoolean("is_active"));
                     return p;
                 }
             }
@@ -123,10 +138,11 @@ public class ProductDAO {
         return null;
     }
 
-    // Get products by category
+    // Get products by category (MODIFIED: Only retrieves active products)
     public List<Product> getProductsByCategory(String category) throws Exception {
         List<Product> products = new ArrayList<>();
-        String sql = "SELECT * FROM products WHERE category = ?";
+        // Only select active products
+        String sql = "SELECT * FROM products WHERE category = ? AND is_active = TRUE";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, category);
@@ -141,6 +157,7 @@ public class ProductDAO {
                     p.setCost(rs.getDouble("cost"));
                     p.setStockQty(rs.getInt("stock_qty"));
                     p.setReorderLevel(rs.getInt("reorder_level"));
+                    p.setActive(rs.getBoolean("is_active"));
                     products.add(p);
                 }
             }
@@ -148,10 +165,11 @@ public class ProductDAO {
         return products;
     }
 
-    // Get products with low stock (stock_qty <= reorder_level)
+    // Get products with low stock (MODIFIED: Only retrieves active products)
     public List<Product> getLowStockProducts() throws Exception {
         List<Product> products = new ArrayList<>();
-        String sql = "SELECT * FROM products WHERE stock_qty <= reorder_level";
+        // Only select active products
+        String sql = "SELECT * FROM products WHERE stock_qty <= reorder_level AND is_active = TRUE";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -165,13 +183,14 @@ public class ProductDAO {
                 p.setCost(rs.getDouble("cost"));
                 p.setStockQty(rs.getInt("stock_qty"));
                 p.setReorderLevel(rs.getInt("reorder_level"));
+                p.setActive(rs.getBoolean("is_active"));
                 products.add(p);
             }
         }
         return products;
     }
 
-    // Update stock quantity (for inventory adjustments)
+    // Update stock quantity (for inventory adjustments) (No change needed here)
     public void updateStock(int productId, int newQuantity) throws Exception {
         String sql = "UPDATE products SET stock_qty = ? WHERE product_id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
